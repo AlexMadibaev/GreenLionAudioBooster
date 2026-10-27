@@ -15,13 +15,13 @@ import android.widget.TextView
 class MainActivity : Activity() {
     private var enhancer: LoudnessEnhancer? = null
     private var equalizer: Equalizer? = null
-    private var gainDb = 4
+    private var gainDb = 0
     private var preset = 0
     private var running = false
     private lateinit var status: TextView
     private lateinit var gainLabel: TextView
     private lateinit var presetLabel: TextView
-    private val presets = arrayOf("Громкость", "Басы", "Чистый голос")
+    private val presets = arrayOf("Нейтральный", "Мягкий бас", "Чистый голос")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,16 +40,16 @@ class MainActivity : Activity() {
         root.addView(label("GREEN LION BOOSTER", 26f))
         root.addView(label("CL-HP51 · Honor Android 15 · Bluetooth"))
         root.addView(label("Экспериментальная обработка системной аудиосессии. Работоспособность зависит от прошивки.", 14f))
-        gainLabel = label("Усиление: +4 дБ", 19f)
+        gainLabel = label("Усиление: 0 дБ", 19f)
         root.addView(gainLabel)
         root.addView(SeekBar(this).apply {
-            max = 18
+            max = 6
             progress = gainDb
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     gainDb = progress
                     gainLabel.text = "Усиление: +$progress дБ" +
-                        if (progress > 9) " · осторожно: возможны искажения" else ""
+                        if (progress > 3) " · возможны искажения" else ""
                     applyGain()
                 }
                 override fun onStartTrackingTouch(bar: SeekBar?) {}
@@ -64,7 +64,7 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     preset = index
                     presetLabel.text = "Пресет: ${presets[preset]}"
-                    if (running) applyEqualizer()
+                    if (running) { applyEqualizer(); equalizer?.enabled = preset != 0 }
                 }
             })
         }
@@ -85,7 +85,7 @@ class MainActivity : Activity() {
             text = "Диагностика"
             setOnClickListener { diagnose() }
         })
-        root.addView(label("Защита: начинай с низкой громкости. При хрипах, боли или звоне в ушах сразу уменьшай уровень. Приложение не может гарантировать аппаратное ограничение пиков и не обходит лимиты Bluetooth.", 14f))
+        root.addView(label("Эквалайзер в нейтральном режиме отключён. Пресеты используют только понижение частот; аппаратный лимитер отсутствует. Защита: начинай с низкой громкости. При хрипах, боли или звоне в ушах сразу уменьшай уровень. Приложение не может гарантировать аппаратное ограничение пиков и не обходит лимиты Bluetooth.", 14f))
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
@@ -103,9 +103,9 @@ class MainActivity : Activity() {
             for (i in 0 until bands) {
                 val frequencyHz = eq.getCenterFreq(i.toShort()) / 1000
                 val db = when (preset) {
-                    0 -> when { frequencyHz < 180 -> 0; frequencyHz < 1500 -> 1; else -> 2 }
-                    1 -> when { frequencyHz < 180 -> 4; frequencyHz < 600 -> 2; else -> 0 }
-                    else -> when { frequencyHz < 220 -> -3; frequencyHz < 1000 -> 0; frequencyHz < 5000 -> 3; else -> 1 }
+                    0 -> 0
+                    1 -> when { frequencyHz < 180 -> 0; frequencyHz < 600 -> -1; else -> -2 }
+                    else -> when { frequencyHz < 220 -> -2; frequencyHz < 1000 -> -1; else -> 0 }
                 }
                 eq.setBandLevel(i.toShort(), (db * 100).coerceIn(min, max).toShort())
             }
@@ -127,8 +127,9 @@ class MainActivity : Activity() {
             messages.add("LoudnessEnhancer: ${e.javaClass.simpleName}: ${e.message}")
         }
         try {
-            equalizer = Equalizer(0, 0).apply { enabled = true }
+            equalizer = Equalizer(0, 0).apply { enabled = false }
             applyEqualizer()
+            equalizer?.enabled = preset != 0
             messages.add("Equalizer: ${if (equalizer?.enabled == true) "активен" else "не активен"}")
         } catch (e: Exception) {
             messages.add("Equalizer: ${e.javaClass.simpleName}: ${e.message}")
